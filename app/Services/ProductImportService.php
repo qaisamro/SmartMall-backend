@@ -20,18 +20,37 @@ class ProductImportService
 {
     public function preview(string $filePath, int $mallId, array $options): array
     {
-        $rows = $this->loadRows($filePath);
-        $validated = $this->validateRows($rows, $mallId, $options);
+        // For large files, only load first 100 rows for preview (faster)
+        $allRows = $this->loadRows($filePath);
+        $totalRows = count($allRows);
+
+        // If file is large, sample first 100 rows for preview validation
+        $previewRows = $totalRows > 100 ? array_slice($allRows, 0, 100) : $allRows;
+        $previewValidated = $this->validateRows($previewRows, $mallId, $options);
+
+        // Scale up statistics if we only sampled
+        if ($totalRows > 100) {
+            $scaleFactor = $totalRows / 100;
+            $summary = [
+                'total_rows' => $totalRows,
+                'valid_rows' => (int) round($previewValidated['valid_rows'] * $scaleFactor),
+                'invalid_rows' => (int) round($previewValidated['invalid_rows'] * $scaleFactor),
+                'duplicate_rows' => (int) round($previewValidated['duplicate_rows'] * $scaleFactor),
+                'errors' => array_slice($previewValidated['errors'], 0, 20), // Limit errors shown
+            ];
+        } else {
+            $summary = [
+                'total_rows' => $totalRows,
+                'valid_rows' => $previewValidated['valid_rows'],
+                'invalid_rows' => $previewValidated['invalid_rows'],
+                'duplicate_rows' => $previewValidated['duplicate_rows'],
+                'errors' => array_slice($previewValidated['errors'], 0, 50),
+            ];
+        }
 
         return [
-            'rows' => array_slice($validated['rows'], 0, 30),
-            'summary' => [
-                'total_rows' => count($validated['rows']),
-                'valid_rows' => $validated['valid_rows'],
-                'invalid_rows' => $validated['invalid_rows'],
-                'duplicate_rows' => $validated['duplicate_rows'],
-                'errors' => $validated['errors'],
-            ],
+            'rows' => array_slice($previewValidated['rows'], 0, 30),
+            'summary' => $summary,
         ];
     }
 
@@ -71,11 +90,13 @@ class ProductImportService
             foreach ($chunk as $row) {
                 if (!empty($row['issues'])) {
                     $failed++;
-                    $errors[] = [
-                        'row' => $row['row_number'],
-                        'message' => implode('; ', $row['issues']),
-                        'data' => $row['preview'],
-                    ];
+                    if (count($errors) < 50) {
+                        $errors[] = [
+                            'row' => $row['row_number'],
+                            'message' => implode('; ', $row['issues']),
+                            'data' => $row['preview'],
+                        ];
+                    }
                     continue;
                 }
 
@@ -83,26 +104,42 @@ class ProductImportService
                     $this->importRowOptimized($row, $import->mall_id, $import->options ?: [], $existingProducts, $cachedCategories);
                     $imported++;
                 } catch (QueryException $exception) {
+                    // Retry once with a new barcode if it's a duplicate barcode error
+                    if (str_contains($exception->getMessage(), 'products_barcode_unique')) {
+                        try {
+                            $row['barcode'] = Str::upper(Str::random(16));
+                            $this->importRowOptimized($row, $import->mall_id, $import->options ?: [], $existingProducts, $cachedCategories);
+                            $imported++;
+                            continue;
+                        } catch (\Exception $retryEx) {
+                            // Fall through to error handling
+                        }
+                    }
                     $failed++;
-                    $errors[] = [
-                        'row' => $row['row_number'],
-                        'message' => 'Database error: ' . $exception->getMessage(),
-                        'data' => $row['preview'],
-                    ];
+                    if (count($errors) < 50) {
+                        $errors[] = [
+                            'row' => $row['row_number'],
+                            'message' => 'Database error: ' . Str::limit($exception->getMessage(), 150),
+                            'data' => $row['preview'],
+                        ];
+                    }
                 } catch (\Exception $exception) {
                     $failed++;
-                    $errors[] = [
-                        'row' => $row['row_number'],
-                        'message' => $exception->getMessage(),
-                        'data' => $row['preview'],
-                    ];
+                    if (count($errors) < 50) {
+                        $errors[] = [
+                            'row' => $row['row_number'],
+                            'message' => Str::limit($exception->getMessage(), 150),
+                            'data' => $row['preview'],
+                        ];
+                    }
                 }
             }
 
+            // Save progress — only store limited errors to avoid max_allowed_packet
             $import->update([
                 'imported_rows' => $imported,
                 'failed_rows' => $failed,
-                'errors' => $errors,
+                'errors' => array_slice($errors, 0, 20),
             ]);
         }
 
@@ -111,7 +148,7 @@ class ProductImportService
             'completed_at' => now(),
             'imported_rows' => $imported,
             'failed_rows' => $failed,
-            'errors' => array_slice($errors, 0, 100), // Limit errors to prevent max_allowed_packet issues
+            'errors' => array_slice($errors, 0, 50),
         ]);
     }
 
@@ -402,12 +439,15 @@ class ProductImportService
                 }
             }
 
-            if ($row['price'] === '' || !is_numeric(str_replace([',', '₪', '$'], '', $row['price']))) {
+            $cleanPrice = str_replace([',', '₪', '$', ' '], '', $row['price']);
+            if ($row['price'] === '' || !is_numeric($cleanPrice)) {
                 $issues[] = 'Price must be a valid number';
             }
 
-            if ($row['stock_quantity'] === '' || !ctype_digit(strval($row['stock_quantity']))) {
-                $issues[] = 'Quantity must be an integer';
+            // Allow empty quantity (defaults to 0) and decimal values (will be rounded)
+            $qtyVal = trim($row['stock_quantity']);
+            if ($qtyVal !== '' && !is_numeric($qtyVal)) {
+                $issues[] = 'Quantity must be a number';
             }
 
             if ($row['discount_price'] !== '' && !is_numeric(str_replace([',', '₪', '$'], '', $row['discount_price']))) {
@@ -521,7 +561,7 @@ class ProductImportService
             'description_en' => $row['description_en'],
             'price' => $this->parseNumeric($row['price']),
             'discount_price' => $row['discount_price'] !== '' ? $this->parseNumeric($row['discount_price']) : null,
-            'stock_quantity' => (int) $row['stock_quantity'],
+            'stock_quantity' => (int) round(floatval($row['stock_quantity'] ?: 0)),
             'brand' => $row['brand'] ?: null,
             'sku' => $row['sku'] ?: null,
             'barcode' => $row['barcode'] ?: Str::upper(Str::random(12)),
@@ -535,7 +575,10 @@ class ProductImportService
             }
             if ($strategy === 'update') {
                 if ($row['image_url'] !== '') {
-                    $productData['image'] = $this->downloadImage($row['image_url']);
+                    $imagePath = $this->downloadImage($row['image_url']);
+                    if ($imagePath) {
+                        $productData['image'] = $imagePath;
+                    }
                 }
                 $existing->update($productData);
                 return;
@@ -543,7 +586,10 @@ class ProductImportService
         }
 
         if ($row['image_url'] !== '') {
-            $productData['image'] = $this->downloadImage($row['image_url']);
+            $imagePath = $this->downloadImage($row['image_url']);
+            if ($imagePath) {
+                $productData['image'] = $imagePath;
+            }
         }
 
         Product::create($productData);
@@ -692,10 +738,10 @@ class ProductImportService
             'description_en' => $row['description_en'],
             'price' => $this->parseNumeric($row['price']),
             'discount_price' => $row['discount_price'] !== '' ? $this->parseNumeric($row['discount_price']) : null,
-            'stock_quantity' => (int) $row['stock_quantity'],
+            'stock_quantity' => (int) round(floatval($row['stock_quantity'] ?: 0)),
             'brand' => $row['brand'] ?: null,
             'sku' => $row['sku'] ?: null,
-            'barcode' => $row['barcode'] ?: Str::upper(Str::random(12)),
+            'barcode' => $row['barcode'] ?: ('IMP-' . strtoupper(substr(Str::uuid()->toString(), 0, 12))),
             'is_active' => $this->parseStatus($row['status']),
         ];
 
@@ -713,7 +759,10 @@ class ProductImportService
             if ($strategy === 'skip') return;
             if ($strategy === 'update') {
                 if ($row['image_url'] !== '') {
-                    $productData['image'] = $this->downloadImage($row['image_url']);
+                    $imagePath = $this->downloadImage($row['image_url']);
+                    if ($imagePath) {
+                        $productData['image'] = $imagePath;
+                    }
                 }
                 $existing->update($productData);
                 return;
@@ -721,9 +770,45 @@ class ProductImportService
         }
 
         if ($row['image_url'] !== '') {
-            $productData['image'] = $this->downloadImage($row['image_url']);
+            $imagePath = $this->downloadImage($row['image_url']);
+            if ($imagePath) {
+                $productData['image'] = $imagePath;
+            }
         }
 
         Product::create($productData);
+    }
+
+    /**
+     * Download an image from URL and store it locally.
+     * Returns the stored path or null on failure.
+     */
+    protected function downloadImage(string $url): ?string
+    {
+        if (empty($url) || !filter_var($url, FILTER_VALIDATE_URL)) {
+            return null;
+        }
+
+        try {
+            $response = Http::timeout(10)->get($url);
+
+            if (!$response->successful()) {
+                return null;
+            }
+
+            $extension = pathinfo(parse_url($url, PHP_URL_PATH), PATHINFO_EXTENSION) ?: 'jpg';
+            $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
+            if (!in_array(strtolower($extension), $allowedExtensions)) {
+                $extension = 'jpg';
+            }
+
+            $filename = 'products/' . Str::uuid() . '.' . $extension;
+            Storage::disk('public')->put($filename, $response->body());
+
+            return $filename;
+        } catch (\Exception $e) {
+            // Silently fail — image download is not critical
+            return null;
+        }
     }
 }

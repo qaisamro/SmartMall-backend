@@ -68,13 +68,38 @@ class ProductImportController extends Controller
             ],
         ]);
 
+        // Increase execution time for large files
+        set_time_limit(300); // 5 minutes
+        ini_set('memory_limit', '512M');
+
         try {
-            $fullPath = Storage::disk('local')->path($filePath);
+            $fullPath = realpath(Storage::disk('local')->path($filePath));
+            if (!$fullPath || !file_exists($fullPath)) {
+                // Fallback: try using the storage path directly
+                $fullPath = storage_path('app/' . str_replace('/', '\\', $filePath));
+                if (!file_exists($fullPath)) {
+                    // Try with forward slashes
+                    $fullPath = storage_path('app/' . $filePath);
+                }
+            }
+
+            if (!file_exists($fullPath)) {
+                return response()->json([
+                    'message' => 'File not found: ' . $fullPath,
+                    'debug' => [
+                        'original_path' => $filePath,
+                        'resolved_path' => $fullPath,
+                    ]
+                ], 404);
+            }
+
             $preview = $this->service->preview($fullPath, $validated['mall_id'], $import->options);
         } catch (\Exception $e) {
-            // Fallback: try using the storage path directly
-            $fullPath = storage_path('app/' . $filePath);
-            $preview = $this->service->preview($fullPath, $validated['mall_id'], $import->options);
+            return response()->json([
+                'message' => 'Preview failed: ' . $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ], 500);
         }
         $import->update(['total_rows' => $preview['summary']['total_rows'], 'summary' => $preview['summary']]);
 
@@ -106,6 +131,10 @@ class ProductImportController extends Controller
             'completed_at' => null,
             'started_at' => now(),
         ]);
+
+        // Increase limits for large file processing
+        set_time_limit(600); // 10 minutes
+        ini_set('memory_limit', '512M');
 
         // Process import synchronously (immediately) instead of queuing
         try {
