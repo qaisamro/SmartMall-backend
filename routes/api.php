@@ -6,6 +6,7 @@ use App\Http\Controllers\API\v1\AdminUserController;
 use App\Http\Controllers\API\v1\OwnerStatsController;
 use App\Http\Controllers\API\v1\MallController;
 use App\Http\Controllers\API\v1\ProductController;
+use App\Http\Controllers\API\v1\ProductImageController;
 use App\Http\Controllers\API\v1\OrderController;
 use App\Http\Controllers\API\v1\CategoryController;
 use App\Http\Controllers\API\v1\MallThemeController;
@@ -14,94 +15,308 @@ use App\Http\Controllers\API\v1\ProductImportController;
 use App\Http\Controllers\API\v1\SubscriptionController;
 use App\Http\Controllers\API\v1\SubscriptionPlanController;
 use App\Http\Controllers\API\v1\ShelfController;
+use App\Http\Controllers\API\v1\DeliveryController;
+use App\Http\Controllers\API\v1\DeliveryZoneController;
+use App\Http\Controllers\API\v1\OrderTrackerController;
+use App\Http\Controllers\API\v1\OfferController;
+use App\Http\Controllers\API\v1\ComplaintController;
+use App\Http\Controllers\API\v1\CustomerProfileController;
+use App\Http\Controllers\API\v1\NotificationController;
+use App\Http\Controllers\API\v1\AdminActivityLogController;
+use App\Http\Controllers\API\v1\CartController;
+use App\Http\Controllers\API\v1\ForgotPasswordController;
+use App\Http\Controllers\API\v1\AdminPopupController;
+use App\Http\Controllers\API\v1\AdminHomeWidgetsController;
+use App\Http\Controllers\API\v1\AdminNotificationController;
+use App\Http\Controllers\API\v1\AdminMonitorController;
+use App\Http\Controllers\API\v1\PushNotificationController;
+use App\Http\Controllers\API\v1\ProductUploadController;
+use App\Http\Controllers\API\v1\SocialAuthController;
+use App\Http\Controllers\API\v1\ReturnController;
+use App\Http\Controllers\API\v1\SyncController;
+use App\Http\Controllers\API\v1\SectionController;
+use App\Http\Controllers\Owner\AccountingController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
     // Public routes
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
+    Route::get('/auth/google/redirect', [SocialAuthController::class, 'redirectToGoogleJson']);
+    Route::get('/auth/google/callback', [SocialAuthController::class, 'handleGoogleCallbackStateless']);
+    Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetLink']);
+    Route::post('/reset-password', [ForgotPasswordController::class, 'reset']);
     Route::get('/malls', [MallController::class, 'index']);
-    Route::get('/malls/slug/{slug}', [MallController::class, 'showBySlug'])->middleware('mall.theme'); // distinct public QR view
-    Route::get('/malls/{id}/products', [ProductController::class, 'getMallProducts'])->middleware('mall.theme'); // contextual viewing
+    Route::get('/malls/slug/{slug}', [MallController::class, 'showBySlug'])->middleware('mall.theme');
+    Route::get('/malls/{id}/products', [ProductController::class, 'getMallProducts'])->middleware('mall.theme');
     Route::get('/malls/{id}/shelves', [ShelfController::class, 'getMallShelves']);
+    Route::get('/malls/{id}/sections', [SectionController::class, 'mallSections'])->middleware('mall.theme');
     Route::get('/malls/{id}', [MallController::class, 'show'])->middleware('mall.theme');
     Route::get('/search', [SearchController::class, 'search'])->middleware('mall.theme');
+    Route::get('/search/global', [SearchController::class, 'globalSearch']);
     Route::get('/products', [ProductController::class, 'index']);
+    Route::get('/categories', [CategoryController::class, 'index']);
+    Route::get('/sections', [SectionController::class, 'index']);
+    Route::get('/public-stats', [MallController::class, 'publicStats']);
     Route::get('/products/{id}', [ProductController::class, 'show']);
-    // Making scanner route public so users can scan without login
     Route::post('/scanner', [ProductController::class, 'scanner']);
-    // QR scan handler - handles both mall and product QR codes
     Route::post('/scan', [MallController::class, 'handleScan']);
+    Route::post('/orders/pending', [OrderController::class, 'createPending']);
+    Route::get('/orders/pending/{id}', [OrderController::class, 'showPending']);
+    Route::get('/offers', [OfferController::class, 'index']);
+    Route::post('/pos/sync/{token}', [\App\Http\Controllers\API\v1\POSController::class, 'addItem']);
+    Route::post('/cart/log-add', [CartController::class, 'logAdd']);
+    Route::get('/popups/active', [AdminPopupController::class, 'active']);
+    Route::get('/home-widgets', [AdminHomeWidgetsController::class, 'publicWidgets']);
+    Route::get('/products/import-template', [ProductUploadController::class, 'downloadTemplate']);
+    Route::get('/push/test-debug', [PushNotificationController::class, 'testDebug']);
+    Route::get('/push/clear-all', function () {
+        \App\Models\PushSubscription::truncate();
+        return response()->json(['message' => 'تم حذف جميع الاشتراكات القديمة بنجاح! يرجى الدخول من الآيفون لتسجيل اشتراك جديد.']);
+    });
 
     // Protected routes
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
+        Route::post('/push/subscribe', [PushNotificationController::class, 'subscribe']);
+        Route::post('/push/unsubscribe', [PushNotificationController::class, 'unsubscribe']);
+        Route::post('/push/test', [PushNotificationController::class, 'test']);
+        Route::get('/orders/{id}', [OrderController::class, 'show']);
 
         // Admin routes
         Route::middleware('role:super-admin|admin')->prefix('admin')->group(function () {
             Route::get('/stats', [AdminStatsController::class, 'index']);
+            Route::get('/monitor', [AdminMonitorController::class, 'index']);
             Route::get('/pending-malls', [AdminStatsController::class, 'pendingMalls']);
             Route::get('/malls', [MallController::class, 'adminIndex']);
             Route::post('/malls', [MallController::class, 'adminStore']);
+            Route::put('/malls/order', [MallController::class, 'updateOrder']);
             Route::get('/malls/{id}/theme', [MallThemeController::class, 'show'])->middleware('mall.theme');
             Route::post('/malls/{id}/theme', [MallThemeController::class, 'store'])->middleware('mall.theme');
             Route::put('/malls/{id}/theme', [MallThemeController::class, 'update'])->middleware('mall.theme');
             Route::post('/malls/{id}/generate-qr', [MallController::class, 'generateQR']);
+            Route::put('/malls/{id}', [MallController::class, 'update']);
+            Route::delete('/malls/{id}', [MallController::class, 'destroy']);
             Route::apiResource('/users', AdminUserController::class);
             Route::get('/product-imports', [ProductImportController::class, 'index']);
             Route::get('/product-imports/template', [ProductImportController::class, 'template']);
-            Route::post('/product-imports/preview', [ProductImportController::class, 'preview']);
+            Route::post('/product-imports/upload', [ProductImportController::class, 'upload']);
+            Route::post('/product-imports/validate', [ProductImportController::class, 'validateFile']);
             Route::get('/product-imports/{id}', [ProductImportController::class, 'show']);
             Route::get('/product-imports/{id}/report', [ProductImportController::class, 'downloadReport']);
-            Route::post('/product-imports/{id}/start', [ProductImportController::class, 'start']);
             Route::delete('/product-imports/{id}', [ProductImportController::class, 'destroy']);
-
-            // Subscription Management
+            Route::post('/product-imports/{id}/cancel', [ProductImportController::class, 'cancel']);
+            Route::get('/products', [ProductController::class, 'adminIndex']);
+            Route::get('/products/lookup', [ProductController::class, 'adminLookupByBarcode']);
+            Route::post('/products', [ProductController::class, 'adminStore']);
+            Route::put('/products/{id}', [ProductController::class, 'adminUpdate']);
+            Route::get('/products/export', [ProductController::class, 'exportExcel']);
+            Route::post('/products/bulk-update-photos', [\App\Http\Controllers\API\v1\AdminBulkPhotoUploadController::class, 'upload']);
+            Route::get('/products/bulk-update-photos/results', [\App\Http\Controllers\API\v1\AdminBulkPhotoUploadController::class, 'results']);
+            Route::get('/products/bulk-update-photos/lookup', [\App\Http\Controllers\API\v1\AdminBulkPhotoUploadController::class, 'lookup']);
+            Route::get('/products/bulk-update-photos/export', [\App\Http\Controllers\API\v1\AdminBulkPhotoUploadController::class, 'export']);
+            Route::put('/products/bulk-update-photos/rows/{rowId}', [\App\Http\Controllers\API\v1\AdminBulkPhotoUploadController::class, 'updateRow']);
+            Route::delete('/products/bulk-update-photos/rows/{rowId}', [\App\Http\Controllers\API\v1\AdminBulkPhotoUploadController::class, 'destroyRow']);
+            Route::delete('/products/bulk-update-photos/rows', [\App\Http\Controllers\API\v1\AdminBulkPhotoUploadController::class, 'destroyAll']);
+            Route::get('/products/bulk-update-photos/missing-report', [\App\Http\Controllers\API\v1\AdminBulkPhotoUploadController::class, 'missingReportIndex']);
+            Route::post('/products/bulk-update-photos/missing-report', [\App\Http\Controllers\API\v1\AdminBulkPhotoUploadController::class, 'missingReportStore']);
+            Route::delete('/products/bulk-update-photos/missing-report/{reportId}', [\App\Http\Controllers\API\v1\AdminBulkPhotoUploadController::class, 'missingReportDestroy']);
+            Route::delete('/products/bulk-update-photos/missing-report', [\App\Http\Controllers\API\v1\AdminBulkPhotoUploadController::class, 'missingReportDestroyAll']);
+            Route::delete('/products/{id}', [ProductController::class, 'adminDestroy']);
+            Route::delete('/products/mall/{mallId}', [ProductController::class, 'destroyAllByMall']);
+            Route::get('/products/import-template', [ProductUploadController::class, 'downloadTemplate']);
+            Route::post('/products/import-main-excel', [ProductUploadController::class, 'uploadMainExcel']);
+            Route::post('/products/import-sub-excel', [ProductUploadController::class, 'uploadSubExcel']);
             Route::apiResource('/subscription-plans', SubscriptionPlanController::class);
             Route::get('/mall-subscriptions', [SubscriptionController::class, 'adminIndex']);
             Route::post('/mall-subscriptions', [SubscriptionController::class, 'adminSubscribe']);
+            Route::post('/mall-subscriptions/trial', [SubscriptionController::class, 'adminGrantTrial']);
+            Route::get('/activity-logs', [AdminActivityLogController::class, 'index']);
+            Route::get('/activity-logs/stats', [AdminActivityLogController::class, 'stats']);
+            Route::delete('/activity-logs/clear-all', [AdminActivityLogController::class, 'clearAll']);
+            Route::delete('/activity-logs/{id}', [AdminActivityLogController::class, 'destroy']);
+            Route::get('/popups', [AdminPopupController::class, 'index']);
+            Route::post('/popups', [AdminPopupController::class, 'store']);
+            Route::get('/popups/{id}', [AdminPopupController::class, 'show']);
+            Route::put('/popups/{id}', [AdminPopupController::class, 'update']);
+            Route::delete('/popups/{id}', [AdminPopupController::class, 'destroy']);
+            Route::get('/widgets/sections', [AdminHomeWidgetsController::class, 'sections']);
+            Route::put('/widgets/sections', [AdminHomeWidgetsController::class, 'updateSections']);
+            Route::get('/widgets/weather', [AdminHomeWidgetsController::class, 'indexWeather']);
+            Route::post('/widgets/weather', [AdminHomeWidgetsController::class, 'storeWeather']);
+            Route::put('/widgets/weather/{id}', [AdminHomeWidgetsController::class, 'updateWeather']);
+            Route::delete('/widgets/weather/{id}', [AdminHomeWidgetsController::class, 'destroyWeather']);
+            Route::get('/widgets/currencies', [AdminHomeWidgetsController::class, 'indexCurrencies']);
+            Route::post('/widgets/currencies', [AdminHomeWidgetsController::class, 'storeCurrency']);
+            Route::put('/widgets/currencies/{id}', [AdminHomeWidgetsController::class, 'updateCurrency']);
+            Route::delete('/widgets/currencies/{id}', [AdminHomeWidgetsController::class, 'destroyCurrency']);
+            Route::get('/widgets/gold', [AdminHomeWidgetsController::class, 'indexGold']);
+            Route::post('/widgets/gold', [AdminHomeWidgetsController::class, 'storeGold']);
+            Route::put('/widgets/gold/{id}', [AdminHomeWidgetsController::class, 'updateGold']);
+            Route::delete('/widgets/gold/{id}', [AdminHomeWidgetsController::class, 'destroyGold']);
+            Route::get('/widgets/prayers', [AdminHomeWidgetsController::class, 'indexPrayers']);
+            Route::post('/widgets/prayers', [AdminHomeWidgetsController::class, 'storePrayer']);
+            Route::put('/widgets/prayers/{id}', [AdminHomeWidgetsController::class, 'updatePrayer']);
+            Route::delete('/widgets/prayers/{id}', [AdminHomeWidgetsController::class, 'destroyPrayer']);
+            Route::get('/widgets/pharmacies', [AdminHomeWidgetsController::class, 'indexPharmacies']);
+            Route::post('/widgets/pharmacies', [AdminHomeWidgetsController::class, 'storePharmacy']);
+            Route::put('/widgets/pharmacies/{id}', [AdminHomeWidgetsController::class, 'updatePharmacy']);
+            Route::delete('/widgets/pharmacies/{id}', [AdminHomeWidgetsController::class, 'destroyPharmacy']);
+            Route::get('/widgets/news', [AdminHomeWidgetsController::class, 'indexNews']);
+            Route::post('/widgets/news', [AdminHomeWidgetsController::class, 'storeNews']);
+            Route::put('/widgets/news/{id}', [AdminHomeWidgetsController::class, 'updateNews']);
+            Route::delete('/widgets/news/{id}', [AdminHomeWidgetsController::class, 'destroyNews']);
+            Route::get('/widgets/alerts', [AdminHomeWidgetsController::class, 'indexAlerts']);
+            Route::post('/widgets/alerts', [AdminHomeWidgetsController::class, 'storeAlert']);
+            Route::put('/widgets/alerts/{id}', [AdminHomeWidgetsController::class, 'updateAlert']);
+            Route::delete('/widgets/alerts/{id}', [AdminHomeWidgetsController::class, 'destroyAlert']);
+            Route::get('/widgets/roads', [AdminHomeWidgetsController::class, 'indexRoads']);
+            Route::post('/widgets/roads', [AdminHomeWidgetsController::class, 'storeRoad']);
+            Route::put('/widgets/roads/{id}', [AdminHomeWidgetsController::class, 'updateRoad']);
+            Route::delete('/widgets/roads/{id}', [AdminHomeWidgetsController::class, 'destroyRoad']);
+            Route::post('/notifications/send', [AdminNotificationController::class, 'send']);
+            Route::get('/returns', [ReturnController::class, 'index']);
+            Route::get('/returns/{id}', [ReturnController::class, 'show']);
+            Route::get('/accounting/stats', [AccountingController::class, 'stats']);
+            Route::get('/sync/status', [SyncController::class, 'status']);
+            Route::post('/sync/incremental', [SyncController::class, 'incremental']);
+            Route::get('/sections', [SectionController::class, 'adminIndex']);
+            Route::post('/sections', [SectionController::class, 'store']);
+            Route::put('/sections/{id}', [SectionController::class, 'update']);
+            Route::delete('/sections/{id}', [SectionController::class, 'destroy']);
+            Route::get('/categories', [CategoryController::class, 'adminIndex']);
         });
 
-        // Mall Owner routes
-        Route::middleware('role:mall-owner')->prefix('owner')->group(function () {
+        // Mall/Supermarket Owner routes
+        Route::middleware(['role:mall-owner|supermarket-owner', \App\Http\Middleware\CheckMallStatus::class, \App\Http\Middleware\CheckSubscription::class])->prefix('owner')->group(function () {
             Route::get('/stats', [OwnerStatsController::class, 'index']);
             Route::get('/recent-products', [OwnerStatsController::class, 'recentProducts']);
             Route::get('/my-malls', [MallController::class, 'myMalls']);
             Route::put('/malls/{id}', [MallController::class, 'update']);
-            Route::post('/malls/{id}/generate-qr', [MallController::class, 'generateQR']);
             Route::get('/categories', [CategoryController::class, 'ownerCategories']);
             Route::post('/malls', [MallController::class, 'store']);
             Route::get('/products', [ProductController::class, 'ownerProducts']);
             Route::post('/products', [ProductController::class, 'store']);
             Route::put('/products/{id}', [ProductController::class, 'update']);
+            Route::get('/products/lookup-by-barcode/{barcode}', [ProductController::class, 'lookupByBarcode']);
+            Route::get('/products/import-template', [ProductUploadController::class, 'downloadTemplate']);
+            Route::post('/products/import-main-excel', [ProductUploadController::class, 'uploadMainExcel']);
+            Route::post('/products/import-sub-excel', [ProductUploadController::class, 'uploadSubExcel']);
+            Route::post('/products/bulk-update-photos', [\App\Http\Controllers\API\v1\AdminBulkPhotoUploadController::class, 'upload']);
+            Route::get('/products/bulk-update-photos/results', [\App\Http\Controllers\API\v1\AdminBulkPhotoUploadController::class, 'results']);
+            Route::get('/products/bulk-update-photos/export', [\App\Http\Controllers\API\v1\AdminBulkPhotoUploadController::class, 'export']);
+            Route::post('/products/{id}/image', [ProductImageController::class, 'upload']);
+            Route::delete('/products/{id}/image', [ProductImageController::class, 'destroy']);
             Route::delete('/products/delete-all', [ProductController::class, 'destroyAll']);
             Route::delete('/products/{id}', [ProductController::class, 'destroy']);
-
             Route::get('/product-imports', [ProductImportController::class, 'index']);
             Route::get('/product-imports/template', [ProductImportController::class, 'template']);
-            Route::post('/product-imports/preview', [ProductImportController::class, 'preview']);
+            Route::post('/product-imports/upload', [ProductImportController::class, 'upload']);
+            Route::post('/product-imports/validate', [ProductImportController::class, 'validateFile']);
             Route::get('/product-imports/{id}', [ProductImportController::class, 'show']);
             Route::get('/product-imports/{id}/report', [ProductImportController::class, 'downloadReport']);
-            Route::post('/product-imports/{id}/start', [ProductImportController::class, 'start']);
             Route::delete('/product-imports/{id}', [ProductImportController::class, 'destroy']);
-
-            // Subscription
+            Route::post('/product-imports/{id}/cancel', [ProductImportController::class, 'cancel']);
             Route::get('/subscription-plans', [SubscriptionController::class, 'index']);
             Route::get('/subscription/current', [SubscriptionController::class, 'current']);
             Route::post('/subscribe', [SubscriptionController::class, 'subscribe']);
-
-            // Shelves (Map)
             Route::get('/shelves', [ShelfController::class, 'index']);
             Route::post('/shelves', [ShelfController::class, 'store']);
             Route::put('/shelves/{id}', [ShelfController::class, 'update']);
             Route::delete('/shelves/{id}', [ShelfController::class, 'destroy']);
+            Route::get('/sections', [SectionController::class, 'ownerSections']);
+            Route::post('/sections', [SectionController::class, 'ownerStore']);
+            Route::post('/sections/reorder', [SectionController::class, 'ownerReorder']);
+            Route::put('/sections/{id}', [SectionController::class, 'ownerUpdate']);
+            Route::delete('/sections/{id}', [SectionController::class, 'ownerDestroy']);
+            Route::get('/orders', [\App\Http\Controllers\API\v1\OrderController::class, 'ownerOrders']);
+            Route::get('/orders/{id}', [\App\Http\Controllers\API\v1\OrderController::class, 'show']);
+            Route::post('/orders/pending/{id}/confirm', [\App\Http\Controllers\API\v1\OrderController::class, 'confirmPending']);
+            Route::post('/pos/sessions', [\App\Http\Controllers\API\v1\POSController::class, 'createSession']);
+            Route::get('/pos/sessions/{token}', [\App\Http\Controllers\API\v1\POSController::class, 'showSession']);
+            Route::post('/pos/finalize/{token}', [\App\Http\Controllers\API\v1\POSController::class, 'finalize']);
+            Route::post('/pos/close/{token}', [\App\Http\Controllers\API\v1\POSController::class, 'closeSession']);
+            Route::delete('/pos/items/{id}', [\App\Http\Controllers\API\v1\POSController::class, 'removeItem']);
+            Route::patch('/pos/items/{id}', [\App\Http\Controllers\API\v1\POSController::class, 'updateItem']);
+            Route::get('/delivery/orders', [\App\Http\Controllers\API\v1\OwnerDeliveryController::class, 'index']);
+            Route::put('/delivery/orders/{id}/status', [\App\Http\Controllers\API\v1\OwnerDeliveryController::class, 'updateStatus']);
+            Route::post('/delivery/orders/{id}/approve', [\App\Http\Controllers\API\v1\OwnerDeliveryController::class, 'approve']);
+            Route::get('/offers', [\App\Http\Controllers\API\v1\OwnerOfferController::class, 'index']);
+            Route::post('/offers', [\App\Http\Controllers\API\v1\OwnerOfferController::class, 'store']);
+            Route::put('/offers/{id}', [\App\Http\Controllers\API\v1\OwnerOfferController::class, 'update']);
+            Route::delete('/offers/{id}', [\App\Http\Controllers\API\v1\OwnerOfferController::class, 'destroy']);
+            Route::get('/accounting', [AccountingController::class, 'index']);
+            Route::post('/accounting', [AccountingController::class, 'store']);
+            Route::delete('/accounting/{id}', [AccountingController::class, 'destroy']);
+            Route::get('/accounting/stats', [AccountingController::class, 'stats']);
+            Route::get('/returns', [ReturnController::class, 'index']);
+            Route::post('/returns', [ReturnController::class, 'store']);
+            Route::get('/returns/{id}', [ReturnController::class, 'show']);
+            Route::get('/sync/status', [SyncController::class, 'status']);
+            Route::post('/sync/incremental', [SyncController::class, 'incremental']);
         });
 
-        // Shared Protected routes
-        // (Scanner moved to public above)
         Route::get('/orders', [OrderController::class, 'index']);
         Route::post('/orders', [OrderController::class, 'store']);
+        
+        Route::middleware('role:customer')->group(function() {
+            Route::get('/customer/purchases', [OrderController::class, 'customerPurchases']);
+            Route::get('/customer/orders/tracking', [OrderController::class, 'customerOrderTracking']);
+            Route::get('/customer/orders/{id}', [OrderController::class, 'customerShow']);
+            Route::get('/customer/order/{id}', [OrderController::class, 'customerShow']);
+            Route::get('/customer/profile', [CustomerProfileController::class, 'show']);
+            Route::put('/customer/profile', [CustomerProfileController::class, 'update']);
+            Route::put('/customer/profile/password', [CustomerProfileController::class, 'updatePassword']);
+            Route::get('/customer/profile/completion', [CustomerProfileController::class, 'completionPercentage']);
+            Route::get('/customer/complaints', [ComplaintController::class, 'myComplaints']);
+            Route::post('/customer/complaints', [ComplaintController::class, 'store']);
+            Route::get('/customer/complaints/{id}/messages', [ComplaintController::class, 'messages']);
+            Route::post('/customer/complaints/{id}/messages', [ComplaintController::class, 'sendMessage']);
+        });
+
+        Route::put('/customer/profile/whatsapp', [CustomerProfileController::class, 'updateWhatsapp']);
+        Route::get('/notifications', [NotificationController::class, 'index']);
+        Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+        Route::put('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+        Route::put('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
+
+        Route::middleware('role:delivery-person')->prefix('delivery')->group(function() {
+        Route::get('/orders/pending', [DeliveryController::class, 'index']);
+        Route::get('/orders/active', [DeliveryController::class, 'myDeliveries']);
+        Route::get('/orders/accepted', [DeliveryController::class, 'accepted']);
+        Route::get('/orders/history', [DeliveryController::class, 'history']);
+        Route::post('/orders/{id}/accept', [DeliveryController::class, 'accept']);
+        Route::post('/orders/{id}/status', [DeliveryController::class, 'updateStatus']);
+        Route::post('/orders/{id}/decline', [DeliveryController::class, 'decline']);
+        });
+
+        Route::middleware('role:order-tracker|super-admin|delivery-person')->prefix('tracker')->group(function() {
+            Route::get('/orders', [OrderTrackerController::class, 'index']);
+            Route::get('/stats', [OrderTrackerController::class, 'stats']);
+            Route::get('/delivery-persons', [OrderTrackerController::class, 'deliveryPersonList']);
+            Route::get('/delivery-persons/{id}', [OrderTrackerController::class, 'deliveryPersonDetail']);
+            Route::get('/malls', [OrderTrackerController::class, 'malls']);
+            Route::get('/search', [OrderTrackerController::class, 'search']);
+        });
+
+        Route::middleware('role:super-admin|admin')->prefix('admin')->group(function() {
+            Route::apiResource('/delivery-zones', DeliveryZoneController::class);
+            Route::get('/offers', [OfferController::class, 'adminIndex']);
+            Route::post('/offers', [OfferController::class, 'store']);
+            Route::put('/offers/{id}', [OfferController::class, 'update']);
+            Route::delete('/offers/{id}', [OfferController::class, 'destroy']);
+            Route::get('/complaints', [ComplaintController::class, 'index']);
+            Route::get('/complaints/{id}/messages', [ComplaintController::class, 'messages']);
+            Route::post('/complaints/{id}/messages', [ComplaintController::class, 'sendMessage']);
+            Route::put('/complaints/{id}/respond', [ComplaintController::class, 'respond']);
+            Route::put('/complaints/{id}/status', [ComplaintController::class, 'updateStatus']);
+            Route::get('/orders/all', [OrderController::class, 'adminAllOrders']);
+        });
+        
+        Route::post('/orders/pending/{id}/confirm', [OrderController::class, 'confirmPending']);
+        Route::get('/orders/{id}/whatsapp-recipients', [OrderController::class, 'whatsappRecipients']);
+        Route::post('/orders/whatsapp/send', [OrderController::class, 'sendWhatsApp']);
+        Route::get('/delivery-zones/active', [DeliveryZoneController::class, 'active']);
     });
 });
-
