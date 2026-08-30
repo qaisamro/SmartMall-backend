@@ -25,3 +25,7 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Google Drive Service Account
+/storage/app/google/*.json
+/storage/app/temp/products-backup/

@@ -8,10 +8,15 @@
     "require": {
         "php": "^8.3",
         "endroid/qr-code": "^6.0",
+        "google/apiclient": "^2.18",
         "laravel/framework": "^13.8",
         "laravel/sanctum": "^4.0",
+        "laravel/socialite": "*",
         "laravel/tinker": "^3.0",
+        "minishlink/web-push": "*",
         "phpoffice/phpspreadsheet": "5.0",
+        "predis/predis": "*",
+        "pusher/pusher-php-server": "^7.2",
         "spatie/laravel-permission": "*"
     },
     "require-dev": {

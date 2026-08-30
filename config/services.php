@@ -35,4 +35,33 @@ return [
         ],
     ],
 
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env('GOOGLE_REDIRECT_URI'),
+    ],
+
+    'ultramsg' => [
+        'instance_id' => env('ULTRAMSG_INSTANCE_ID', ''),
+        'token' => env('ULTRAMSG_TOKEN', ''),
+    ],
+
+    'webpush' => [
+        'public_key'  => env('VAPID_PUBLIC_KEY'),
+        'private_key' => env('VAPID_PRIVATE_KEY'),
+        'subject'     => env('VAPID_SUBJECT', env('APP_URL', 'https://samrtmall.cloud')),
+    ],
+
+    'google_drive' => [
+        // OAuth 2.0 (حساب شخصي smartmallps2026@gmail.com - My Drive)
+        'client_id'     => env('GOOGLE_DRIVE_OAUTH_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_DRIVE_OAUTH_CLIENT_SECRET'),
+        'redirect_uri'  => env('GOOGLE_DRIVE_OAUTH_REDIRECT_URI', 'https://samrtmall.cloud/google-drive/callback'),
+        'folder_id'     => env('GOOGLE_DRIVE_FOLDER_ID', '1f-Tep5ghOi0OGUpuyACSC6iFH5XllC-L'),
+        'enabled'       => env('GOOGLE_DRIVE_BACKUP_ENABLED', true),
+        'backup_time'   => env('GOOGLE_DRIVE_BACKUP_TIME', '03:00'),
+        // Legacy Service Account (للتوافق، لم يعد يُستخدم في Backup الجديد)
+        'credentials'   => env('GOOGLE_DRIVE_CREDENTIALS', 'storage/app/google/smartmallbackup-331ff1b8f70c.json'),
+    ],
+
 ];
