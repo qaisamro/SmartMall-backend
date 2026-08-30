@@ -172,7 +172,6 @@ class GoogleDriveService
         if ($needsRefresh) {
             Log::info('[GoogleDrive] OAuth token expired/expiring, refreshing', ['email' => $token->email]);
             try {
-                $client->setAccessToken(['refresh_token' => $token->refresh_token]);
                 $newToken = $client->fetchAccessTokenWithRefreshToken($token->refresh_token);
                 if (isset($newToken['error'])) {
                     throw new \RuntimeException('Refresh failed: ' . ($newToken['error_description'] ?? $newToken['error']));
