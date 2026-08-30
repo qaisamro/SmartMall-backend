@@ -69,18 +69,4 @@ class Product extends Model
             get: fn () => $this->discount_price ?? $this->price,
         );
     }
-
-    protected function linkPhoto(): Attribute
-    {
-        return Attribute::make(
-            get: fn ($value) => $value ?: $this->barcodeOverride?->link_photo,
-        );
-    }
-
-    protected function sectionId(): Attribute
-    {
-        return Attribute::make(
-            get: fn ($value) => $value ?: $this->barcodeOverride?->section_id,
-        );
-    }
 }
