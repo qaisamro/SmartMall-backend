@@ -115,9 +115,11 @@ class MallController extends Controller
             'description'      => 'sometimes|nullable|string',
             'slug'             => 'sometimes|nullable|string|max:255',
             'location_arabic'  => 'sometimes|nullable|string|max:255',
+            'is_active'        => 'sometimes|boolean',
+            'status'           => 'sometimes|nullable|string|max:50',
         ]);
 
-        $data = $request->only(['name_ar', 'name_en', 'description', 'slug', 'location_arabic']);
+        $data = $request->only(['name_ar', 'name_en', 'description', 'slug', 'location_arabic', 'is_active', 'status']);
 
         // Handle cover image manually (bypasses PHP fileinfo issues)
         if ($request->hasFile('cover_image')) {
