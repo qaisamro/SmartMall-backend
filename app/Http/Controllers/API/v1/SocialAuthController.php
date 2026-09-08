@@ -24,6 +24,16 @@ class SocialAuthController extends Controller
 
     public function handleGoogleCallback()
     {
+        // إذا كان الطلب يحتوي token (من loginOrRegister redirect), فهو للواجهة الأمامية وليس لـ Socialite
+        if (request()->has('token')) {
+            // إرجاع index.html للـ SPA ليعالجه GoogleCallback.jsx
+            $indexPath = '/home/u205641829/domains/samrtmall.cloud/public_html/index.html';
+            if (file_exists($indexPath)) {
+                return response()->file($indexPath);
+            }
+            return redirect()->to((config('app.frontend_url') ?: config('app.url')) . '/auth/google/callback?token=' . request()->input('token'));
+        }
+
         \Illuminate\Support\Facades\Log::error('Google callback hit', ['url' => request()->fullUrl(), 'code' => request()->input('code') ? substr(request()->input('code'), 0, 10) . '...' : 'MISSING', 'state' => request()->input('state') ? 'present' : 'missing', 'all' => request()->query()]);
         try {
             $googleUser = Socialite::driver('google')->stateless()->user();
