@@ -28,9 +28,24 @@ return Application::configure(basePath: dirname(__DIR__))
         });
         $exceptions->report(function (\Throwable $e) {
             try {
-                // لا نسجل ValidationException و Authentication كأخطاء حرجة
-                if ($e instanceof \Illuminate\Validation\ValidationException) return;
                 if ($e instanceof \Illuminate\Auth\AuthenticationException) return;
+                if ($e instanceof \Illuminate\Validation\ValidationException) {
+                    // سجل أخطاء التحقق كـ warning في سجل الصحة (مفيد لتعديل المنشأة)
+                    try {
+                        \App\Services\ErrorMonitoringService::report([
+                            'type' => 'validation.' . ($e->validator->fails() ? array_key_first($e->validator->failed() ?? []) : 'unknown'),
+                            'severity' => 'warning',
+                            'source' => 'backend',
+                            'message' => 'فشل التحقق: ' . implode(', ', array_map(fn($msgs) => implode(', ', (array)$msgs), $e->errors())),
+                            'file' => $e->getFile(),
+                            'line' => $e->getLine(),
+                            'status_code' => 422,
+                            'request_id' => request()->attributes->get('request_id'),
+                            'stack_trace' => substr($e->getTraceAsString(), 0, 2000),
+                        ]);
+                    } catch (\Throwable $inner2) {}
+                    return;
+                }
                 $severity = $e instanceof \Symfony\Component\HttpKernel\Exception\HttpException && $e->getStatusCode() < 500 ? 'warning' : 'error';
                 if ($e->getCode() >= 500 || str_contains($e->getMessage(), 'CRITICAL')) $severity = 'critical';
                 \App\Services\ErrorMonitoringService::reportThrowable($e, $severity);
