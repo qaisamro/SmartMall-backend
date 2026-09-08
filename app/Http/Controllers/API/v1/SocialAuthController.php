@@ -24,7 +24,7 @@ class SocialAuthController extends Controller
 
     public function handleGoogleCallback()
     {
-        \Illuminate\Support\Facades\Log::info('Google callback hit', ['url' => request()->fullUrl(), 'code' => request()->input('code') ? substr(request()->input('code'), 0, 10) . '...' : 'MISSING', 'state' => request()->input('state') ? 'present' : 'missing', 'all' => request()->query()]);
+        \Illuminate\Support\Facades\Log::error('Google callback hit', ['url' => request()->fullUrl(), 'code' => request()->input('code') ? substr(request()->input('code'), 0, 10) . '...' : 'MISSING', 'state' => request()->input('state') ? 'present' : 'missing', 'all' => request()->query()]);
         try {
             $googleUser = Socialite::driver('google')->stateless()->user();
         } catch (\Throwable $e) {
@@ -38,7 +38,7 @@ class SocialAuthController extends Controller
 
     public function handleGoogleCallbackStateless()
     {
-        \Illuminate\Support\Facades\Log::info('Google stateless callback hit', ['url' => request()->fullUrl(), 'code' => request()->input('code') ? substr(request()->input('code'), 0, 10) . '...' : 'MISSING', 'state' => request()->input('state') ? 'present' : 'missing']);
+        \Illuminate\Support\Facades\Log::error('Google stateless callback hit', ['url' => request()->fullUrl(), 'code' => request()->input('code') ? substr(request()->input('code'), 0, 10) . '...' : 'MISSING', 'state' => request()->input('state') ? 'present' : 'missing']);
         try {
             $googleUser = Socialite::driver('google')->stateless()->user();
         } catch (\Throwable $e) {
