@@ -160,4 +160,15 @@ class DeliveryController extends Controller
         $orders = $query->latest()->get();
         return response()->json($orders);
     }
+
+    public function stats()
+    {
+        $userId = auth()->id();
+        return response()->json([
+            'active_count' => Order::where('delivery_user_id', $userId)->whereIn('delivery_status', ['accepted', 'delivering'])->count(),
+            'delivered_count' => Order::where('delivery_user_id', $userId)->where('delivery_status', 'delivered')->count(),
+            'pending_count' => Order::where('delivery_status', 'preparing')->count(),
+            'preparing_count' => Order::where('delivery_status', 'preparing')->count(),
+        ]);
+    }
 }

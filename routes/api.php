@@ -295,6 +295,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
 
         Route::middleware('role:delivery-person')->prefix('delivery')->group(function() {
+        Route::get('/stats', [DeliveryController::class, 'stats']);
         Route::get('/orders/pending', [DeliveryController::class, 'index']);
         Route::get('/orders/active', [DeliveryController::class, 'myDeliveries']);
         Route::get('/orders/accepted', [DeliveryController::class, 'accepted']);
