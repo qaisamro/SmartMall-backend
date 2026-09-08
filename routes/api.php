@@ -29,6 +29,7 @@ use App\Http\Controllers\API\v1\AdminPopupController;
 use App\Http\Controllers\API\v1\AdminHomeWidgetsController;
 use App\Http\Controllers\API\v1\AdminNotificationController;
 use App\Http\Controllers\API\v1\AdminMonitorController;
+use App\Http\Controllers\API\v1\SystemHealthController;
 use App\Http\Controllers\API\v1\PushNotificationController;
 use App\Http\Controllers\API\v1\ProductUploadController;
 use App\Http\Controllers\API\v1\SocialAuthController;
@@ -82,12 +83,24 @@ Route::prefix('v1')->group(function () {
         Route::post('/push/subscribe', [PushNotificationController::class, 'subscribe']);
         Route::post('/push/unsubscribe', [PushNotificationController::class, 'unsubscribe']);
         Route::post('/push/test', [PushNotificationController::class, 'test']);
+        Route::post('/system-errors/report', [SystemHealthController::class, 'report']);
         Route::get('/orders/{id}', [OrderController::class, 'show']);
 
         // Admin routes
         Route::middleware('role:super-admin|admin')->prefix('admin')->group(function () {
             Route::get('/stats', [AdminStatsController::class, 'index']);
             Route::get('/monitor', [AdminMonitorController::class, 'index']);
+            // System Health — مركز الصحة الشامل
+            Route::get('/system-health/overview', [SystemHealthController::class, 'overview']);
+            Route::post('/system-health/scan', [SystemHealthController::class, 'scan'])->middleware('throttle:30,1');
+            Route::get('/system-health/scans', [SystemHealthController::class, 'scans']);
+            Route::get('/system-health/scans/{id}', [SystemHealthController::class, 'showScan']);
+            Route::get('/system-health/errors', [SystemHealthController::class, 'errors']);
+            Route::get('/system-health/errors/{id}', [SystemHealthController::class, 'showError']);
+            Route::put('/system-health/errors/{id}/resolve', [SystemHealthController::class, 'resolve']);
+            Route::put('/system-health/errors/{id}/unresolve', [SystemHealthController::class, 'unresolve']);
+            Route::delete('/system-health/errors/{id}', [SystemHealthController::class, 'destroy']);
+            Route::get('/system-health/export/{scanId}', [SystemHealthController::class, 'export']);
             Route::get('/pending-malls', [AdminStatsController::class, 'pendingMalls']);
             Route::get('/malls', [MallController::class, 'adminIndex']);
             Route::post('/malls', [MallController::class, 'adminStore']);

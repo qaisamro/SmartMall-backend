@@ -12,6 +12,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->append(\App\Http\Middleware\RequestIdMiddleware::class);
         $middleware->alias([
             'role'       => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
@@ -20,5 +21,21 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, \Illuminate\Http\Request $request) {
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json(['message' => 'Unauthenticated.'], 401);
+            }
+        });
+        $exceptions->report(function (\Throwable $e) {
+            try {
+                // لا نسجل ValidationException و Authentication كأخطاء حرجة
+                if ($e instanceof \Illuminate\Validation\ValidationException) return;
+                if ($e instanceof \Illuminate\Auth\AuthenticationException) return;
+                $severity = $e instanceof \Symfony\Component\HttpKernel\Exception\HttpException && $e->getStatusCode() < 500 ? 'warning' : 'error';
+                if ($e->getCode() >= 500 || str_contains($e->getMessage(), 'CRITICAL')) $severity = 'critical';
+                \App\Services\ErrorMonitoringService::reportThrowable($e, $severity);
+            } catch (\Throwable $inner) {
+                // لا نكسر سلسلة التقارير
+            }
+        });
     })->create();
