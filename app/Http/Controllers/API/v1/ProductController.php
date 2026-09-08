@@ -86,6 +86,12 @@ class ProductController extends Controller
         $mallIds = $request->user()->malls()->pluck('id');
         if (!$mallIds->contains((int)$validated['mall_id'])) return response()->json(['message' => 'You do not own this mall.'], 403);
         $data = $request->only(['mall_id','category_id','mall_section_id','section_id','name_ar','name_en','description_ar','description_en','price','discount_price','brand','sku','image','link_photo','shelf_location','stock_quantity']);
+        // معالجة stock_quantity: إذا لم يُرسل أو كان فارغاً، افترض 0
+        if (!isset($data['stock_quantity']) || $data['stock_quantity'] === '' || $data['stock_quantity'] === null) {
+            $data['stock_quantity'] = 0;
+        } else {
+            $data['stock_quantity'] = (int) $data['stock_quantity'];
+        }
         if (!empty($data['mall_section_id'])) {
             $linkedSectionId = \App\Models\MallSection::where('id', $data['mall_section_id'])->where('mall_id', $data['mall_id'])->value('section_id');
             if ($linkedSectionId && empty($data['section_id'])) $data['section_id'] = $linkedSectionId;
