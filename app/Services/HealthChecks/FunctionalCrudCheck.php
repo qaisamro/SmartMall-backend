@@ -146,9 +146,16 @@ class FunctionalCrudCheck implements HealthCheckInterface
             return $orig;
         }
         if (in_array($col, ['is_active', 'delivery_enabled', 'enable_quantity_system', 'is_protected'])) return $orig ? 0 : 1;
-        if (in_array($col, ['offer_limit', 'total_offers_used', 'stock_quantity', 'quantity', 'price', 'price_at_sale', 'total_amount', 'fee'])) {
-            $num = is_numeric($orig) ? (int)$orig : 0;
+        if (in_array($col, ['offer_limit', 'total_offers_used', 'stock_quantity', 'quantity', 'price', 'price_at_sale', 'discount_price', 'total_amount', 'fee'])) {
+            $num = is_numeric($orig) ? (float)$orig : 0;
             return $num + 1;
+        }
+        if (in_array($col, ['delivery_status'])) {
+            // احترام enum delivery_status
+            $valid = ['pending', 'preparing', 'ready', 'delivering', 'delivered', 'failed', 'accepted'];
+            // اختر قيمة مختلفة عن الأصلية
+            foreach ($valid as $v) if ($v !== $orig) return $v;
+            return 'pending';
         }
         if (in_array($col, ['latitude'])) return '31.5';
         if (in_array($col, ['longitude'])) return '35.1';
