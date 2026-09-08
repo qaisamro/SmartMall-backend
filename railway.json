@@ -4,7 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "php artisan migrate --force --no-interaction && php artisan serve --host 0.0.0.0 --port $PORT",
+    "startCommand": "php artisan migrate --force --no-interaction || true; php artisan serve --host 0.0.0.0 --port $PORT",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }
