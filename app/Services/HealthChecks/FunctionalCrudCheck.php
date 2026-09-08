@@ -103,7 +103,7 @@ class FunctionalCrudCheck implements HealthCheckInterface
             'malls' => 'name_ar',
             'products' => 'name_ar',
             'categories' => 'name_ar',
-            'orders' => 'status',
+            'orders' => 'general_notes',
             'users' => 'name',
             'offers' => 'title_ar',
             'delivery_zones' => 'name',
