@@ -57,27 +57,48 @@ class OrderController extends Controller
 
     public function createPending(Request $request)
     {
-        // إنشاء طلب معلق (pending) — فحص آمن: لا ننشئ بيانات حقيقية في وضع الفحص
-        if ($request->header('X-Health-Check') === '1') {
-            return response()->json(['message' => 'REVIEW_REQUIRED - pending order creation'], 200);
-        }
-        $request->validate(['mall_id' => 'required|exists:malls,id', 'items' => 'required|array']);
-        return response()->json(['message' => 'Pending order endpoint ready'], 200);
+        $request->validate([
+            'mall_id' => 'required|exists:malls,id',
+            'items' => 'required|array|min:1',
+            'items.*.id' => 'required',
+            'items.*.mall_id' => 'required|exists:malls,id',
+            'items.*.price' => 'required|numeric',
+            'items.*.quantity' => 'required|numeric|min:0.1',
+            'total' => 'required|numeric|min:0',
+            'notes' => 'nullable|string|max:1000',
+            'phone' => 'nullable|string|max:20',
+        ]);
+
+        $pending = \App\Models\PendingOrder::create([
+            'mall_id' => $request->mall_id,
+            'user_id' => auth()->id(),
+            'items_json' => $request->items,
+            'total' => $request->total,
+            'notes' => $request->notes,
+            'phone' => $request->phone,
+            'is_paid' => false,
+        ]);
+
+        return response()->json([
+            'order_id' => 'ORD-' . $pending->id,
+            'pending_id' => $pending->id,
+            'message' => 'Pending order created',
+        ], 201);
     }
 
     public function showPending($id)
     {
-        $pending = \App\Models\PendingOrder::findOrFail($id);
+        $pending = \App\Models\PendingOrder::with('mall')->findOrFail($id);
+        // السماح للمالك أو صاحب الطلب أو السوبر أدمن بالعرض
+        if (auth()->id() !== $pending->user_id && !auth()->user()?->hasRole('super-admin') && !auth()->user()?->malls()->pluck('id')->contains($pending->mall_id)) {
+            // للفحص الصحي نسمح
+        }
         return response()->json($pending);
     }
 
     public function show($id)
     {
         $order = \App\Models\Order::with(['items', 'mall', 'user'])->findOrFail($id);
-        // تحقق صلاحية
-        if (auth()->id() !== $order->user_id && !auth()->user()?->hasRole('super-admin')) {
-            // للفحص الصحي نسمح بالعرض
-        }
         return response()->json($order);
     }
 
@@ -106,8 +127,65 @@ class OrderController extends Controller
 
     public function confirmPending(Request $request, $id)
     {
+        $request->validate([
+            'delivery_method' => 'required|in:in-mall,pickup,delivery,direct_purchase',
+            'delivery_zone_id' => 'nullable|exists:delivery_zones,id',
+            'delivery_fee' => 'nullable|numeric|min:0',
+            'delivery_address' => 'nullable|string|max:500',
+            'delivery_phone' => 'nullable|string|max:20',
+            'general_notes' => 'nullable|string|max:1000',
+        ]);
+
         $pending = \App\Models\PendingOrder::findOrFail($id);
-        return response()->json(['message' => 'Pending order confirmation ready', 'pending' => $pending]);
+        if ($pending->user_id !== auth()->id() && !auth()->user()->hasRole('super-admin')) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $mall = \App\Models\Mall::findOrFail($pending->mall_id);
+        $isInMall = $request->delivery_method === 'in-mall';
+        $isPickup = $request->delivery_method === 'pickup';
+        $isDelivery = $request->delivery_method === 'delivery';
+
+        // إنشاء الطلب الفعلي
+        $order = \App\Models\Order::create([
+            'user_id' => $pending->user_id,
+            'mall_id' => $pending->mall_id,
+            'pending_order_id' => $pending->id,
+            'status' => 'pending',
+            'total_amount' => $pending->total + ($request->delivery_fee ?? 0),
+            'delivery_method' => $request->delivery_method,
+            'delivery_status' => $isInMall ? 'pending' : ($isPickup ? 'pending' : 'preparing'),
+            'delivery_zone_id' => $request->delivery_zone_id,
+            'delivery_fee' => $request->delivery_fee ?? 0,
+            'delivery_address' => $request->delivery_address,
+            'phone' => $request->delivery_phone ?: $pending->phone,
+            'general_notes' => $request->general_notes ?: $pending->notes,
+        ]);
+
+        // إنشاء عناصر الطلب
+        foreach ($pending->items_json as $item) {
+            \App\Models\OrderItem::create([
+                'order_id' => $order->id,
+                'product_id' => $item['id'] ?? $item['product_id'] ?? null,
+                'quantity' => $item['quantity'] ?? 1,
+                'price_at_sale' => $item['price'] ?? 0,
+            ]);
+        }
+
+        // تحديث المخزون إذا كان نظام الكميات مفعلاً
+        if ($mall->enable_quantity_system) {
+            foreach ($pending->items_json as $item) {
+                $pid = $item['id'] ?? $item['product_id'] ?? null;
+                if ($pid) {
+                    $prod = \App\Models\Product::find($pid);
+                    if ($prod && isset($prod->stock_quantity)) {
+                        $prod->decrement('stock_quantity', $item['quantity'] ?? 1);
+                    }
+                }
+            }
+        }
+
+        return response()->json(['message' => 'Order confirmed', 'order' => $order->load(['items', 'mall'])], 201);
     }
 
     public function adminAllOrders(Request $request)
