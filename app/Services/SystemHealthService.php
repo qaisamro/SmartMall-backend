@@ -21,6 +21,7 @@ class SystemHealthService
             new HealthChecks\ApiAvailabilityCheck(),
             new HealthChecks\DatabaseSchemaCheck(),
             new HealthChecks\ApiPerformanceCheck(),
+            new HealthChecks\FrontendHealthCheck(),
         ];
     }
 
