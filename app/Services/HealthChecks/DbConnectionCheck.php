@@ -13,12 +13,14 @@ class DbConnectionCheck implements HealthCheckInterface
 
     public function run(): HealthResult
     {
-        $start = microtime(true);
+        $start = hrtime(true);
         try {
             DB::select('SELECT 1');
-            $ms = (int) ((microtime(true) - $start) * 1000);
+            $ms = (int) round((hrtime(true) - $start) / 1e6);
+            if ($ms === 0) $ms = 1;
             if ($ms > 1000) return HealthResult::warning("الاتصال بطيء: {$ms}ms", ['duration_ms' => $ms], 'medium', 'warning');
-            return HealthResult::pass("الاتصال سليم ({$ms}ms)", ['duration_ms' => $ms]);
+            $display = $ms === 1 ? '<1ms' : "{$ms}ms";
+            return HealthResult::pass("الاتصال سليم ($display)", ['duration_ms' => $ms]);
         } catch (\Throwable $e) {
             return HealthResult::failed('فشل الاتصال: ' . substr($e->getMessage(), 0, 200), ['error' => $e->getMessage()], 'critical', 'critical');
         }
