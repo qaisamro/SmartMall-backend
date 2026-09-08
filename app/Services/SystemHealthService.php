@@ -147,6 +147,7 @@ class SystemHealthService
         $errors = \App\Models\SystemError::unresolved()->count();
         $warnings = \App\Models\SystemError::where('severity', 'warning')->where('resolved', false)->count();
         $critical = \App\Models\SystemError::critical()->where('resolved', false)->count();
+        $healthScore = $last?->meta['health_score'] ?? ($last ? 100 - ($last->critical * 25 + $last->failed * 15 + $last->warnings * 5) : null);
 
         // fallback من AdminMonitor إذا لم يوجد scan بعد
         $queueSize = 0; $failedJobs = 0;
@@ -156,6 +157,7 @@ class SystemHealthService
         return [
             'last_scan' => $last,
             'overall' => $last?->overall_status ?? 'unknown',
+            'health_score' => $healthScore,
             'errors' => $errors,
             'warnings' => $warnings,
             'critical' => $critical,
