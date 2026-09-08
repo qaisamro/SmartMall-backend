@@ -43,4 +43,42 @@ class SearchController extends Controller
 
         return response()->json($products);
     }
+
+    /**
+     * Global search across all malls (used by Navbar).
+     */
+    public function globalSearch(Request $request)
+    {
+        $request->validate(['query' => 'required|string|min:1']);
+        $q = $request->input('query');
+
+        $products = Product::where('is_active', true)
+            ->where(function ($query) use ($q) {
+                $query->where('name_ar', 'LIKE', "%{$q}%")
+                    ->orWhere('name_en', 'LIKE', "%{$q}%")
+                    ->orWhere('barcode', 'LIKE', "%{$q}%");
+            })
+            ->with(['mall:id,name_ar,slug', 'category:id,name_ar'])
+            ->limit(30)
+            ->get();
+
+        $grouped = $products->groupBy('mall_id')->map(function ($items, $mallId) {
+            $mall = $items->first()->mall;
+            return [
+                'mall_id' => $mallId,
+                'mall_slug' => $mall->slug ?? $mallId,
+                'mall_name' => $mall->name_ar ?? $mall->name_en ?? 'مول',
+                'products' => $items->map(function ($p) {
+                    if ($p->hide_stock_from_customer) unset($p->stock_quantity);
+                    return $p;
+                })->values(),
+            ];
+        })->values();
+
+        return response()->json([
+            'total' => $products->count(),
+            'grouped' => $grouped,
+            'query' => $q,
+        ]);
+    }
 }

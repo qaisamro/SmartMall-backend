@@ -8,6 +8,21 @@ use Illuminate\Http\Request;
 
 class CategoryController extends Controller
 {
+    public function index(Request $request)
+    {
+        $categories = Category::with('mall:id,name_ar')
+            ->when($request->filled('mall_id'), fn ($q) => $q->where('mall_id', $request->mall_id))
+            ->orderBy('name_ar')
+            ->limit(50)
+            ->get();
+        return response()->json($categories);
+    }
+
+    public function adminIndex(Request $request)
+    {
+        return $this->index($request);
+    }
+
     public function ownerCategories(Request $request)
     {
         $mallIds = $request->user()->malls()->pluck('id');
