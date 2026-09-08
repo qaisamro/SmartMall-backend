@@ -29,6 +29,8 @@ class SystemHealthService
             new HealthChecks\FunctionalProductCheck(),
             new HealthChecks\FunctionalAuthCheck(),
             new HealthChecks\FunctionalOrderCheck(),
+            new HealthChecks\FunctionalMallCheck(),
+            new HealthChecks\FunctionalGoogleAuthCheck(),
         ];
     }
 
