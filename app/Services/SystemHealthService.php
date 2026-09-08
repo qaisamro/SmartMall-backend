@@ -26,6 +26,7 @@ class SystemHealthService
 
     public static function runScan(?int $triggeredBy = null, string $triggerType = 'manual'): SystemScan
     {
+        $scanStart = microtime(true);
         $scan = SystemScan::create([
             'status' => 'running',
             'trigger_type' => $triggerType,
@@ -66,6 +67,28 @@ class SystemHealthService
                 Log::warning('Failed to save scan result', ['key' => $check->key(), 'error' => $e->getMessage()]);
             }
 
+            // مزامنة كل فشل حقيقي مع سجل الأخطاء (Error Log) — يظهر في Dashboard كـ "أخطاء غير محلولة"
+            if (in_array($result->status, ['failed', 'warning'], true) && in_array($result->severity, ['error', 'critical'], true)) {
+                try {
+                    \App\Services\ErrorMonitoringService::report([
+                        'type' => 'health.' . $check->key(),
+                        'severity' => $result->severity,
+                        'source' => 'backend',
+                        'message' => $check->title() . ': ' . $result->message,
+                        'file' => 'SystemHealthService:' . $check->key(),
+                        'line' => null,
+                        'url' => null,
+                        'route' => $check->key(),
+                        'method' => 'GET',
+                        'status_code' => $result->status === 'failed' ? 500 : 400,
+                        'request_id' => 'SCAN-' . $scan->id,
+                        'stack_trace' => json_encode($details, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    ]);
+                } catch (\Throwable $e) {
+                    Log::warning('Failed to sync scan error to system_errors', ['key' => $check->key(), 'error' => $e->getMessage()]);
+                }
+            }
+
             // تحديث العدادات
             match ($result->status) {
                 'pass' => $counts['passed']++,
@@ -83,10 +106,19 @@ class SystemHealthService
         elseif ($counts['failed'] > 0) $overall = 'error';
         elseif ($counts['warnings'] > 0) $overall = 'warning';
 
+        // حساب Health Score حقيقي 0-100 (critical -25, error -15, warning -5, not_checked -2)
+        $score = 100 - ($counts['critical'] * 25 + $counts['failed'] * 15 + $counts['warnings'] * 5 + $counts['not_checked'] * 2 + $counts['review_required'] * 1);
+        $score = max(0, min(100, $score));
+
+        $durationMs = (int) ((microtime(true) - $scanStart) * 1000);
+        // ضمان عدم السلبية وعدم الصفر الوهمي
+        if ($durationMs < 0) $durationMs = 0;
+        if ($durationMs === 0) $durationMs = max(1, (int) ((microtime(true) - $scanStart) * 1000));
+
         $scan->update([
             'status' => 'completed',
             'finished_at' => now(),
-            'duration_ms' => (int) (now()->diffInMilliseconds($scan->started_at)),
+            'duration_ms' => $durationMs,
             'total_tests' => count($checks),
             'passed' => $counts['passed'],
             'warnings' => $counts['warnings'],
@@ -95,10 +127,10 @@ class SystemHealthService
             'not_checked' => $counts['not_checked'],
             'review_required' => $counts['review_required'],
             'overall_status' => $overall,
-            'meta' => ['checks' => array_map(fn($c) => $c->key(), $checks)],
+            'meta' => ['checks' => array_map(fn($c) => $c->key(), $checks), 'health_score' => $score],
         ]);
 
-        return $scan->fresh();
+        return $scan->fresh()->load('results');
     }
 
     private static function runWithTimeout(HealthCheckInterface $check, int $seconds): HealthChecks\HealthResult
