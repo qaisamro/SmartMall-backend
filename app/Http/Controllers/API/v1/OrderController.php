@@ -158,7 +158,7 @@ class OrderController extends Controller
             'delivery_zone_id' => $request->delivery_zone_id,
             'delivery_fee' => $request->delivery_fee ?? 0,
             'delivery_address' => $request->delivery_address,
-            'phone' => $request->delivery_phone ?: $pending->phone,
+            'delivery_phone' => $request->delivery_phone ?: $pending->phone,
             'general_notes' => $request->general_notes ?: $pending->notes,
         ]);
 
