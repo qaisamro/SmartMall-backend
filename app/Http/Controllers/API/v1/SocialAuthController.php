@@ -25,7 +25,8 @@ class SocialAuthController extends Controller
     public function handleGoogleCallback()
     {
         try {
-            $googleUser = Socialite::driver('google')->user();
+            // استخدام stateless لتجنب InvalidStateException عند عدم وجود session (API + Web)
+            $googleUser = Socialite::driver('google')->stateless()->user();
         } catch (\Throwable $e) {
             $msg = $e->getMessage() ?: get_class($e) . ' (code ' . $e->getCode() . ')';
             \Illuminate\Support\Facades\Log::error('Google callback failed', ['error' => $msg, 'exception' => get_class($e), 'trace' => substr($e->getTraceAsString(), 0, 1000)]);
