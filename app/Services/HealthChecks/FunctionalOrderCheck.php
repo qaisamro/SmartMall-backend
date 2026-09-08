@@ -36,7 +36,7 @@ class FunctionalOrderCheck implements HealthCheckInterface
                     'order_id' => $orderId,
                     'product_id' => $product->id,
                     'quantity' => 1,
-                    'price' => $product->price,
+                    'price_at_sale' => $product->price,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
