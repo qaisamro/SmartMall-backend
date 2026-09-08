@@ -108,7 +108,6 @@ class MallController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        // Validate only text fields — file handled manually below
         $request->validate([
             'name_ar'          => 'sometimes|required|string|max:255',
             'name_en'          => 'sometimes|nullable|string|max:255',
@@ -117,9 +116,19 @@ class MallController extends Controller
             'location_arabic'  => 'sometimes|nullable|string|max:255',
             'is_active'        => 'sometimes|boolean',
             'status'           => 'sometimes|nullable|string|max:50',
+            'offer_limit'      => 'sometimes|nullable|integer|min:0|max:100000',
+            'delivery_enabled' => 'sometimes|boolean',
+            'enable_quantity_system' => 'sometimes|boolean',
+            'open_time'        => 'sometimes|nullable|date_format:H:i',
+            'close_time'       => 'sometimes|nullable|date_format:H:i',
+            'contact_email'    => 'sometimes|nullable|email|max:255',
+            'contact_phone'    => 'sometimes|nullable|string|max:30',
+            'type'             => 'sometimes|nullable|in:mall,supermarket',
+            'latitude'         => 'sometimes|nullable|numeric|between:-90,90',
+            'longitude'        => 'sometimes|nullable|numeric|between:-180,180',
         ]);
 
-        $data = $request->only(['name_ar', 'name_en', 'description', 'slug', 'location_arabic', 'is_active', 'status']);
+        $data = $request->only(['name_ar', 'name_en', 'description', 'slug', 'location_arabic', 'is_active', 'status', 'offer_limit', 'delivery_enabled', 'enable_quantity_system', 'open_time', 'close_time', 'contact_email', 'contact_phone', 'type', 'latitude', 'longitude']);
 
         // Handle cover image manually (bypasses PHP fileinfo issues)
         if ($request->hasFile('cover_image')) {

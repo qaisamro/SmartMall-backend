@@ -37,6 +37,17 @@ class FunctionalMallCheck implements HealthCheckInterface
                 return HealthResult::failed('التعديل لم يُحفظ', ['expected' => $testName, 'got' => $reloaded->name_ar], 'critical', 'critical');
             }
 
+            // اختبار حفظ offer_limit أيضاً (المشكلة المبلغ عنها)
+            $originalLimit = $mall->offer_limit ?? 0;
+            $testLimit = $originalLimit + 1;
+            DB::table('malls')->where('id', $mall->id)->update(['offer_limit' => $testLimit]);
+            $reloaded2 = DB::table('malls')->where('id', $mall->id)->first();
+            if ((int)$reloaded2->offer_limit !== (int)$testLimit) {
+                DB::rollBack();
+                return HealthResult::failed('فشل حفظ offer_limit', ['expected' => $testLimit, 'got' => $reloaded2->offer_limit, 'mall_id' => $mall->id], 'critical', 'critical');
+            }
+            DB::table('malls')->where('id', $mall->id)->update(['offer_limit' => $originalLimit]);
+
             // اختبار إنشاء منشأة وهمية ثم حذفها
             $testMallId = DB::table('malls')->insertGetId([
                 'owner_id' => $mall->owner_id,
