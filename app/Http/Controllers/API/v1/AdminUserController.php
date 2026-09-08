@@ -53,6 +53,28 @@ class AdminUserController extends Controller
         ], 201);
     }
 
+    public function show($id)
+    {
+        $user = User::with('roles', 'mall')->findOrFail($id);
+        return response()->json($user);
+    }
+
+    public function update(Request $request, $id)
+    {
+        $user = User::findOrFail($id);
+        $request->validate([
+            'name' => 'sometimes|required|string|max:255',
+            'email' => ['sometimes', 'required', 'email', Rule::unique('users')->ignore($user->id)],
+            'role' => ['sometimes', 'required', Rule::in(['customer', 'mall-owner', 'super-admin', 'admin'])],
+        ]);
+        if ($request->filled('name')) $user->name = $request->name;
+        if ($request->filled('email')) $user->email = $request->email;
+        if ($request->filled('password')) $user->password = Hash::make($request->password);
+        $user->save();
+        if ($request->filled('role')) $user->syncRoles([$request->role]);
+        return response()->json($user->load('roles', 'mall'));
+    }
+
     public function destroy($id)
     {
         $user = User::findOrFail($id);

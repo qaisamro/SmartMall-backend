@@ -40,6 +40,26 @@ class ProductImportController extends Controller
         return Response::download($templatePath, 'smartmall-product-import-template.xlsx')->deleteFileAfterSend(true);
     }
 
+    public function upload(Request $request)
+    {
+        return $this->preview($request);
+    }
+
+    public function validateFile(Request $request)
+    {
+        return $this->preview($request);
+    }
+
+    public function cancel(Request $request, $id)
+    {
+        $import = ProductImport::findOrFail($id);
+        if (! $this->ownerCanAccessImport($request, $import)) {
+            return response()->json(['message' => 'You do not own this import.'], 403);
+        }
+        $import->update(['status' => 'cancelled']);
+        return response()->json(['message' => 'Cancelled', 'import' => $import]);
+    }
+
     public function preview(Request $request)
     {
         $validated = $request->validate([
