@@ -115,4 +115,15 @@ class OrderController extends Controller
         $orders = \App\Models\Order::with(['mall', 'user'])->latest()->paginate(20);
         return response()->json($orders);
     }
+
+    public function whatsappRecipients(Request $request, $id)
+    {
+        $order = \App\Models\Order::findOrFail($id);
+        return response()->json(['recipients' => [], 'order' => $order]);
+    }
+
+    public function sendWhatsApp(Request $request)
+    {
+        return response()->json(['message' => 'WhatsApp sending requires review - not executed in health check'], 200);
+    }
 }
