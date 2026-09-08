@@ -137,7 +137,12 @@ class OrderController extends Controller
         ]);
 
         $pending = \App\Models\PendingOrder::findOrFail($id);
-        if ($pending->user_id !== auth()->id() && !auth()->user()->hasRole('super-admin')) {
+        // السماح للضيف (user_id null) بأن يؤكده أي مستخدم مسجل، وتحديثه
+        if ($pending->user_id === null && auth()->id()) {
+            $pending->update(['user_id' => auth()->id()]);
+            $pending->refresh();
+        }
+        if ($pending->user_id !== auth()->id() && !auth()->user()?->hasRole('super-admin')) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
