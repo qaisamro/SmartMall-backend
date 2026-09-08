@@ -121,25 +121,17 @@ class FunctionalCrudCheck implements HealthCheckInterface
 
     private function getUpdatableColumns(string $table): array
     {
-        try {
-            $cols = Schema::getColumns($table);
-            $names = array_column($cols, 'name');
-            // استبعاد الأعمدة غير القابلة للتعديل
-            $exclude = ['id', 'created_at', 'updated_at', 'deleted_at', 'email_verified_at', 'remember_token'];
-            return array_values(array_filter($names, fn($c) => !in_array($c, $exclude)));
-        } catch (\Throwable $e) {
-            // fallback للخريطة القديمة
-            $map = [
-                'malls' => ['name_ar', 'name_en', 'offer_limit', 'delivery_enabled'],
-                'products' => ['name_ar', 'price', 'stock_quantity'],
-                'categories' => ['name_ar'],
-                'orders' => ['general_notes'],
-                'users' => ['name'],
-                'offers' => ['title_ar'],
-                'delivery_zones' => ['name'],
-            ];
-            return $map[$table] ?? [];
-        }
+        // فقط الحقول التي يعدلها الأدمن فعلياً في الواجهة (input fields) — ليست كل أعمدة DB
+        $map = [
+            'malls' => ['name_ar', 'name_en', 'offer_limit', 'delivery_enabled', 'enable_quantity_system', 'open_time', 'close_time', 'contact_email', 'contact_phone', 'location_arabic'],
+            'products' => ['name_ar', 'name_en', 'price', 'discount_price', 'stock_quantity'],
+            'categories' => ['name_ar', 'name_en'],
+            'orders' => ['general_notes', 'delivery_status'],
+            'users' => ['name', 'phone'],
+            'offers' => ['title_ar', 'title_en'],
+            'delivery_zones' => ['name', 'fee'],
+        ];
+        return $map[$table] ?? [];
     }
 
     private function generateTestValue(string $col, $orig, string $table)
