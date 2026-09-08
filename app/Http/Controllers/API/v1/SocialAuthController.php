@@ -26,9 +26,10 @@ class SocialAuthController extends Controller
     {
         try {
             $googleUser = Socialite::driver('google')->user();
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Google callback failed', ['error' => $e->getMessage()]);
-            return redirect()->to((config('app.frontend_url') ?: config('app.url')) . '/login?error=google_auth_failed');
+        } catch (\Throwable $e) {
+            $msg = $e->getMessage() ?: get_class($e) . ' (code ' . $e->getCode() . ')';
+            \Illuminate\Support\Facades\Log::error('Google callback failed', ['error' => $msg, 'exception' => get_class($e), 'trace' => substr($e->getTraceAsString(), 0, 1000)]);
+            return redirect()->to((config('app.frontend_url') ?: config('app.url')) . '/login?error=google_auth_failed&details=' . urlencode(substr($msg, 0, 200)));
         }
 
         return $this->loginOrRegister($googleUser);
@@ -38,9 +39,10 @@ class SocialAuthController extends Controller
     {
         try {
             $googleUser = Socialite::driver('google')->stateless()->user();
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Google stateless callback failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
-            return redirect()->to((config('app.frontend_url') ?: config('app.url')) . '/login?error=google_auth_failed&details=' . urlencode(substr($e->getMessage(), 0, 200)));
+        } catch (\Throwable $e) {
+            $msg = $e->getMessage() ?: get_class($e) . ' (code ' . $e->getCode() . ')';
+            \Illuminate\Support\Facades\Log::error('Google stateless callback failed', ['error' => $msg, 'exception' => get_class($e), 'trace' => substr($e->getTraceAsString(), 0, 2000)]);
+            return redirect()->to((config('app.frontend_url') ?: config('app.url')) . '/login?error=google_auth_failed&details=' . urlencode(substr($msg, 0, 200)));
         }
 
         return $this->loginOrRegister($googleUser);
