@@ -190,6 +190,13 @@ class OrderController extends Controller
             }
         }
 
+        // إرسال الإشعارات (كما كان قبل) — دون المساس بالوظائف الحالية
+        try {
+            \App\Jobs\ProcessOrderNotifications::dispatch($order);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Failed to dispatch order notifications', ['order_id' => $order->id, 'error' => $e->getMessage()]);
+        }
+
         return response()->json(['message' => 'Order confirmed', 'order' => $order->load(['items', 'mall'])], 201);
     }
 
