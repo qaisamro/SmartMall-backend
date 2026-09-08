@@ -31,6 +31,7 @@ class SystemHealthService
             new HealthChecks\FunctionalOrderCheck(),
             new HealthChecks\FunctionalMallCheck(),
             new HealthChecks\FunctionalGoogleAuthCheck(),
+            new HealthChecks\FunctionalCrudCheck(),
         ];
     }
 
