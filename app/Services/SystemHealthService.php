@@ -26,6 +26,9 @@ class SystemHealthService
             new HealthChecks\UxFormsCheck(),
             new HealthChecks\UxResponsiveCheck(),
             new HealthChecks\UxAccessibilityCheck(),
+            new HealthChecks\FunctionalProductCheck(),
+            new HealthChecks\FunctionalAuthCheck(),
+            new HealthChecks\FunctionalOrderCheck(),
         ];
     }
 
