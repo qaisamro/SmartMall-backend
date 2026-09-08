@@ -22,6 +22,10 @@ class SystemHealthService
             new HealthChecks\DatabaseSchemaCheck(),
             new HealthChecks\ApiPerformanceCheck(),
             new HealthChecks\FrontendHealthCheck(),
+            new HealthChecks\UxNavigationCheck(),
+            new HealthChecks\UxFormsCheck(),
+            new HealthChecks\UxResponsiveCheck(),
+            new HealthChecks\UxAccessibilityCheck(),
         ];
     }
 
