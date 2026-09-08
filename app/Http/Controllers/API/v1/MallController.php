@@ -151,6 +151,39 @@ class MallController extends Controller
         return response()->json(['qr_code_path' => $path]);
     }
 
+    public function publicStats()
+    {
+        try {
+            return response()->json([
+                'malls' => \App\Models\Mall::where('status', 'approved')->count(),
+                'products' => \App\Models\Product::count(),
+                'users' => \App\Models\User::count(),
+                'orders' => \App\Models\Order::count(),
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['malls' => 0, 'products' => 0, 'users' => 0, 'orders' => 0]);
+        }
+    }
+
+    public function updateOrder(Request $request)
+    {
+        $request->validate(['orders' => 'required|array', 'orders.*.id' => 'required|integer', 'orders.*.sort_order' => 'required|integer']);
+        foreach ($request->orders as $o) {
+            \App\Models\Mall::where('id', $o['id'])->update(['sort_order' => $o['sort_order']]);
+        }
+        return response()->json(['message' => 'Order updated']);
+    }
+
+    public function destroy($id)
+    {
+        $mall = \App\Models\Mall::findOrFail($id);
+        if ($mall->owner_id !== auth()->id() && !auth()->user()->hasRole('super-admin') && !auth()->user()->hasRole('admin')) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+        $mall->delete();
+        return response()->json(['message' => 'Deleted']);
+    }
+
     public function handleScan(Request $request)
     {
         $request->validate([

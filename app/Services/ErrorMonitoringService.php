@@ -45,33 +45,63 @@ class ErrorMonitoringService
             $payload['line'] ?? null
         );
 
-        $existing = SystemError::where('fingerprint', $fingerprint)->first();
-        if ($existing) {
-            $existing->increment('occurrences');
-            $existing->update(['last_seen_at' => now()]);
-            return $existing->fresh();
+        // إذا لم تكن جداول النظام موجودة بعد (قبل migrate), لا نكسر الطلب
+        try {
+            if (!\Illuminate\Support\Facades\Schema::hasTable('system_errors')) {
+                \Illuminate\Support\Facades\Log::warning('system_errors table missing, skipping DB report', ['fingerprint' => $fingerprint]);
+                // إرجاع كائن وهمي لتجنب كسر السلسلة
+                $dummy = new SystemError(['fingerprint' => $fingerprint, 'message' => $payload['message']]);
+                $dummy->id = 0;
+                return $dummy;
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Schema check failed', ['error' => $e->getMessage()]);
+            $dummy = new SystemError(['fingerprint' => $fingerprint, 'message' => $payload['message']]);
+            $dummy->id = 0;
+            return $dummy;
         }
 
-        return SystemError::create([
-            'fingerprint' => $fingerprint,
-            'type' => $payload['type'] ?? 'exception',
-            'severity' => $payload['severity'] ?? 'error',
-            'source' => $payload['source'] ?? 'backend',
-            'message' => $payload['message'],
-            'file' => isset($payload['file']) ? substr($payload['file'], 0, 255) : null,
-            'line' => $payload['line'] ?? null,
-            'url' => isset($payload['url']) ? substr($payload['url'], 0, 500) : (Request::fullUrl() ? substr(Request::fullUrl(), 0, 500) : null),
-            'route' => $payload['route'] ?? (Request::route()?->getName()),
-            'method' => $payload['method'] ?? Request::method(),
-            'status_code' => $payload['status_code'] ?? null,
-            'request_id' => $payload['request_id'] ?? Request::attributes->get('request_id'),
-            'stack_trace' => $payload['stack_trace'] ?? null,
-            'user_id' => $payload['user_id'] ?? Auth::id(),
-            'user_role' => $payload['user_role'] ?? (Auth::user()?->getRoleNames()->first()),
-            'occurrences' => 1,
-            'first_seen_at' => now(),
-            'last_seen_at' => now(),
-        ]);
+        try {
+            $existing = SystemError::where('fingerprint', $fingerprint)->first();
+            if ($existing) {
+                $existing->increment('occurrences');
+                $existing->update(['last_seen_at' => now()]);
+                return $existing->fresh();
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('system_errors query failed', ['error' => $e->getMessage()]);
+            $dummy = new SystemError(['fingerprint' => $fingerprint, 'message' => $payload['message']]);
+            $dummy->id = 0;
+            return $dummy;
+        }
+
+        try {
+            return SystemError::create([
+                'fingerprint' => $fingerprint,
+                'type' => $payload['type'] ?? 'exception',
+                'severity' => $payload['severity'] ?? 'error',
+                'source' => $payload['source'] ?? 'backend',
+                'message' => $payload['message'],
+                'file' => isset($payload['file']) ? substr($payload['file'], 0, 255) : null,
+                'line' => $payload['line'] ?? null,
+                'url' => isset($payload['url']) ? substr($payload['url'], 0, 500) : (Request::fullUrl() ? substr(Request::fullUrl(), 0, 500) : null),
+                'route' => $payload['route'] ?? (Request::route()?->getName()),
+                'method' => $payload['method'] ?? Request::method(),
+                'status_code' => $payload['status_code'] ?? null,
+                'request_id' => $payload['request_id'] ?? Request::attributes->get('request_id'),
+                'stack_trace' => $payload['stack_trace'] ?? null,
+                'user_id' => $payload['user_id'] ?? Auth::id(),
+                'user_role' => $payload['user_role'] ?? (Auth::user()?->getRoleNames()->first()),
+                'occurrences' => 1,
+                'first_seen_at' => now(),
+                'last_seen_at' => now(),
+            ]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('system_errors create failed', ['error' => $e->getMessage()]);
+            $dummy = new SystemError(['fingerprint' => $fingerprint, 'message' => $payload['message']]);
+            $dummy->id = 0;
+            return $dummy;
+        }
     }
 
     public static function reportThrowable(\Throwable $e, string $severity = 'error', ?string $requestId = null): SystemError
