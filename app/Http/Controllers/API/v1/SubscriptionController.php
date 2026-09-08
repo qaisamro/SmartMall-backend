@@ -117,4 +117,19 @@ class SubscriptionController extends Controller
 
         return response()->json($subscription->load(['mall', 'plan']));
     }
+
+    public function adminGrantTrial(Request $request)
+    {
+        $validated = $request->validate(['mall_id' => 'required|exists:malls,id', 'days' => 'nullable|integer|min:1|max:30']);
+        $days = $validated['days'] ?? 14;
+        $existing = Subscription::where('mall_id', $validated['mall_id'])->where('status', 'active')->first();
+        if ($existing) return response()->json(['message' => 'Mall already has active subscription'], 422);
+        $plan = SubscriptionPlan::where('is_active', true)->first();
+        if (!$plan) return response()->json(['message' => 'No active plan found'], 422);
+        $sub = Subscription::create([
+            'mall_id' => $validated['mall_id'], 'plan_id' => $plan->id,
+            'billing_period' => 'trial', 'starts_at' => now(), 'ends_at' => now()->addDays($days), 'status' => 'active',
+        ]);
+        return response()->json($sub->load('plan'));
+    }
 }

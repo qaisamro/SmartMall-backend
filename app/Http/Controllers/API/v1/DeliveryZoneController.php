@@ -42,6 +42,12 @@ class DeliveryZoneController extends Controller
         return response()->json($zone);
     }
 
+    public function show($id)
+    {
+        $zone = DeliveryZone::findOrFail($id);
+        return response()->json($zone);
+    }
+
     public function destroy($id)
     {
         $zone = DeliveryZone::findOrFail($id);

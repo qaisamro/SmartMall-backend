@@ -96,4 +96,23 @@ class OrderController extends Controller
     {
         return $this->show($id);
     }
+
+    public function ownerOrders(Request $request)
+    {
+        $mallIds = $request->user()->malls()->pluck('id');
+        $orders = \App\Models\Order::whereIn('mall_id', $mallIds)->with(['items', 'user'])->latest()->paginate(20);
+        return response()->json($orders);
+    }
+
+    public function confirmPending(Request $request, $id)
+    {
+        $pending = \App\Models\PendingOrder::findOrFail($id);
+        return response()->json(['message' => 'Pending order confirmation ready', 'pending' => $pending]);
+    }
+
+    public function adminAllOrders(Request $request)
+    {
+        $orders = \App\Models\Order::with(['mall', 'user'])->latest()->paginate(20);
+        return response()->json($orders);
+    }
 }
