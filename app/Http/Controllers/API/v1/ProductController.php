@@ -286,15 +286,18 @@ class ProductController extends Controller
         $code = preg_replace('/[\x{0610}-\x{061A}\x{064B}-\x{065F}\x{0670}]/u', '', trim($request->code));
         $codeNorm = preg_replace('/[^0-9]/', '', $code);
         $mallId = $request->mall_id;
-        $query = Product::with('shelves','category')->where(fn($q) => $q->where('barcode',$code)->orWhere('qr_code',$code)->orWhere('sku',$code)->when($codeNorm !== $code, fn($qq) => $qq->orWhere('barcode',$codeNorm)));
+        $query = Product::with(['shelves','category','mall:id,enable_quantity_system'])->where(fn($q) => $q->where('barcode',$code)->orWhere('qr_code',$code)->orWhere('sku',$code)->when($codeNorm !== $code, fn($qq) => $qq->orWhere('barcode',$codeNorm)));
         if ($mallId) $query->where('mall_id', $mallId);
         $product = $query->first();
         if (!$product) {
             $sub = \App\Models\SubBarcode::where(fn($q) => $q->where('sub_barcode',$code)->when($codeNorm !== $code, fn($qq) => $qq->orWhere('sub_barcode',$codeNorm)))->when($mallId, fn($q) => $q->where('mall_id',$mallId))->first();
-            if ($sub && $sub->product_id) $product = Product::with('shelves','category')->where('id',$sub->product_id)->when($mallId, fn($q) => $q->where('mall_id',$mallId))->first();
+            if ($sub && $sub->product_id) $product = Product::with(['shelves','category','mall:id,enable_quantity_system'])->where('id',$sub->product_id)->when($mallId, fn($q) => $q->where('mall_id',$mallId))->first();
         }
         if (!$product) return response()->json(['message'=>'المنتج غير موجود'],404);
-        if ($product->hide_stock_from_customer || ($product->mall && !$product->mall->enable_quantity_system)) unset($product->stock_quantity);
+        // إذا كان نظام الكميات معطل للمول، لا ترسل stock_quantity إطلاقاً
+        $mallForStock = $product->mall;
+        if (!$mallForStock && $mallId) $mallForStock = \App\Models\Mall::find($mallId);
+        if ($product->hide_stock_from_customer || ($mallForStock && !$mallForStock->enable_quantity_system)) unset($product->stock_quantity);
         return response()->json($product);
     }
 
