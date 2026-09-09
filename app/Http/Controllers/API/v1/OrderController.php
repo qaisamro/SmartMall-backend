@@ -121,7 +121,23 @@ class OrderController extends Controller
     public function ownerOrders(Request $request)
     {
         $mallIds = $request->user()->malls()->pluck('id');
-        $orders = \App\Models\Order::whereIn('mall_id', $mallIds)->with(['items', 'user'])->latest()->paginate(20);
+        $query = \App\Models\Order::whereIn('mall_id', $mallIds)->with(['items', 'user']);
+
+        // فلترة حسب طريقة الاستلام
+        if ($request->filled('delivery_method') && $request->delivery_method !== 'all') {
+            $query->where('delivery_method', $request->delivery_method);
+        }
+
+        // فلترة حسب الشهر أو التاريخ
+        if ($request->filled('month')) {
+            $month = $request->month; // YYYY-MM
+            $query->whereYear('created_at', substr($month, 0, 4))->whereMonth('created_at', substr($month, 5, 2));
+        } else {
+            if ($request->filled('from')) $query->whereDate('created_at', '>=', $request->from);
+            if ($request->filled('to')) $query->whereDate('created_at', '<=', $request->to);
+        }
+
+        $orders = $query->latest()->paginate(20);
         return response()->json($orders);
     }
 
