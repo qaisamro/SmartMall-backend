@@ -11,9 +11,13 @@ class MallRepository extends BaseRepository
         parent::__construct($model);
     }
 
-    public function getActiveMalls(string $search = null)
+    public function getActiveMalls(string $search = null, ?string $type = null)
     {
         $query = $this->model->with('theme')->where('is_active', true)->where('status', 'approved');
+
+        if ($type && $type !== 'all' && in_array($type, ['mall', 'supermarket'])) {
+            $query->where('type', $type);
+        }
 
         if ($search) {
             $query->where(function ($query) use ($search) {

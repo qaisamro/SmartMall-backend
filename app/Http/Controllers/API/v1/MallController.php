@@ -22,7 +22,8 @@ class MallController extends Controller
     public function index(Request $request)
     {
         $search = $request->query('search');
-        return response()->json($this->mallRepository->getActiveMalls($search));
+        $type = $request->query('type');
+        return response()->json($this->mallRepository->getActiveMalls($search, $type));
     }
 
     public function store(Request $request)
