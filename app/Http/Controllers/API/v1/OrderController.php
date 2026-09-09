@@ -104,7 +104,10 @@ class OrderController extends Controller
 
     public function customerPurchases(Request $request)
     {
-        $orders = \App\Models\Order::where('user_id', auth()->id())->latest()->paginate(20);
+        $orders = \App\Models\Order::with(['mall:id,name_ar', 'items.product:id,name_ar', 'user:id,name'])
+            ->where('user_id', auth()->id())
+            ->latest()
+            ->paginate(20);
         return response()->json($orders);
     }
 
